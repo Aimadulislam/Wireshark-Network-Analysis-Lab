@@ -1,77 +1,116 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Wireshark Network Analysis Lab - Dependency Installer
-# Purpose: Detects OS and automates the installation of Wireshark, TShark,
-#          Python3, and all required library packages.
+# Wireshark Network Analysis Lab - Enterprise System Dependency Installer
+# Purpose: Detects operating system, validates privileges, handles early abort
+#          traps, and installs Wireshark, TShark, Python3, and Pip dependencies.
 # ==============================================================================
 
 set -euo pipefail
 
-# ANSI color codes for pretty output
+# ANSI color codes for robust logging
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
-log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-log_err() { echo -e "${RED}[ERROR]${NC} $1"; }
+# Modular logging functions
+log_info() { printf "${GREEN}[INFO] [%s]${NC} %s\n" "$(date +'%H:%M:%S')" "$1"; }
+log_warn() { printf "${YELLOW}[WARN] [%s]${NC} %s\n" "$(date +'%H:%M:%S')" "$1"; }
+log_err()  { printf "${RED}[ERROR] [%s]${NC} %s\n" "$(date +'%H:%M:%S')" "$1"; }
+log_step() { printf "${BLUE}[STEP] [%s]${NC} %s\n" "$(date +'%H:%M:%S')" "$1"; }
+
+# Cleanup trap for graceful termination on SIGINT/SIGTERM
+cleanup() {
+    local exit_code=$?
+    if [ "$exit_code" -ne 0 ]; then
+        log_err "Installer interrupted or failed. Cleaning up temporary operations..."
+    else
+        log_info "Installer completed its run successfully."
+    fi
+}
+trap cleanup EXIT
 
 print_help() {
+    echo "Wireshark Dependency Installer Utility"
     echo "Usage: $0 [options]"
     echo "Options:"
-    echo "  -h, --help     Show this help message and exit"
-    echo "  --non-interactive  Run without prompting (forces Wireshark system configuration)"
+    echo "  -h, --help          Show this helper guide and exit"
+    echo "  --non-interactive   Suppresses reconfigure prompts for non-root TShark installation"
 }
 
-# Parse basic CLI arguments
+# Parse CLI arguments
 interactive=true
-if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-    print_help
-    exit 0
-elif [[ "${1:-}" == "--non-interactive" ]]; then
-    interactive=false
-fi
+for arg in "$@"; do
+    case "$arg" in
+        -h|--help)
+            print_help
+            exit 0
+            ;;
+        --non-interactive)
+            interactive=false
+            ;;
+    esac
+done
 
-log_info "Starting Wireshark Network Analysis Lab installer..."
+log_step "Starting enterprise dependency auditing..."
+
+# Validate python3 is available
+if ! command -v python3 &>/dev/null; then
+    log_err "Python3 is not installed. Please install Python3 before running this installer."
+    exit 1
+fi
 
 # Detect Operating System
 OS_TYPE="$(uname -s)"
-log_info "Detected operating system: $OS_TYPE"
+log_info "Detected Host OS: $OS_TYPE"
 
 install_debian_deps() {
-    log_info "Updating apt package index..."
+    log_step "Configuring Debian/Ubuntu system components..."
+    
+    # Check if apt-get is available
+    if ! command -v apt-get &>/dev/null; then
+        log_err "apt-get package manager not found on this Linux system."
+        exit 1
+    fi
+
+    log_info "Updating apt package listings..."
     sudo apt-get update -y
 
-    log_info "Installing Python3, Pip, and SQLite..."
-    sudo apt-get install -y python3 python3-pip python3-venv sqlite3 tshark
+    log_info "Installing Python3 Virtual Environments, TShark, SQLite3, and network tools..."
+    sudo apt-get install -y python3-pip python3-venv sqlite3 tshark tcpdump libpcap-dev
 
-    log_info "Configuring Wireshark/TShark permissions (non-root execution)..."
     if [ "$interactive" = false ]; then
+        log_info "Setting non-interactive pre-selections for TShark setuid configuration..."
         echo "wireshark-common wireshark-common/install-setuid boolean true" | sudo debconf-set-selections
     fi
-    sudo dpkg-reconfigure -f noninteractive wireshark-common || log_warn "DPKG reconfigure skipped"
 
-    log_info "Adding current user to wireshark group..."
-    sudo usermod -aG wireshark "$USER" || log_warn "Failed to add user to wireshark group"
-    log_warn "Note: You will need to log out and back in for wireshark group memberships to apply."
+    log_info "Configuring Wireshark privileges for non-root capture execution..."
+    sudo dpkg-reconfigure -f noninteractive wireshark-common || log_warn "Wireshark packet capture privilege reconfig skipped."
+
+    log_info "Adding $USER to the local wireshark privilege group..."
+    sudo usermod -aG wireshark "$USER" || log_warn "Failed to add $USER to wireshark group automatically. Capture privileges may require sudo."
 }
 
 install_macos_deps() {
-    if ! command -v brew &> /dev/null; then
-        log_err "Homebrew not found! Please install Homebrew first (https://brew.sh) or install Wireshark manually."
+    log_step "Configuring macOS / Darwin system components..."
+    
+    if ! command -v brew &>/dev/null; then
+        log_err "Homebrew package manager not found. Please install Homebrew from https://brew.sh first."
         exit 1
     fi
-    log_info "Installing wireshark, tshark, and python3 via Homebrew..."
-    brew install wireshark tshark python3 sqlite
+
+    log_info "Installing wireshark, tshark, and system utilities..."
+    brew install wireshark tshark python3 sqlite3 libpcap
 }
 
+# Distribute OS-specific installations
 case "$OS_TYPE" in
     Linux)
         if [ -f /etc/debian_version ]; then
             install_debian_deps
         else
-            log_err "Unsupported Linux distribution. Please install Wireshark, TShark, and Python3 manually."
+            log_err "Unsupported Linux distribution. Please install Wireshark, TShark, and Python3 manually via your default package manager."
             exit 1
         fi
         ;;
@@ -79,23 +118,24 @@ case "$OS_TYPE" in
         install_macos_deps
         ;;
     *)
-        log_err "Unsupported OS: $OS_TYPE. This lab is optimized for Ubuntu/Debian and macOS."
+        log_err "Unsupported Operating System: $OS_TYPE. This lab requires Ubuntu/Debian or macOS."
         exit 1
         ;;
 esac
 
-# Setting up virtual environment
-log_info "Setting up Python3 virtual environment..."
+# Setting up isolated python virtual workspace
+log_step "Setting up isolated virtual python environment..."
 python3 -m venv venv
-./venv/bin/pip install --upgrade pip
+# Ensure latest pip is available inside virtualenv
+./venv/bin/python3 -m pip install --upgrade pip
 
 if [ -f "requirements.txt" ]; then
-    log_info "Installing python requirements from requirements.txt..."
+    log_info "Installing requirement packages from requirements.txt..."
     ./venv/bin/pip install -r requirements.txt
 else
-    log_warn "requirements.txt not found. Installing primary packages manually..."
-    ./venv/bin/pip install scapy pyshark pandas matplotlib
+    log_warn "requirements.txt not found. Triggering manual packages load..."
+    ./venv/bin/pip install scapy pyshark pandas matplotlib numpy
 fi
 
-log_info "Installation completed successfully! Welcome to the Network Analysis Lab."
-log_info "Run './setup.sh' next to initialize capturing directories and retrieve sample datasets."
+log_info "System-level installation complete."
+log_info "Proceeding to execute './setup.sh' to establish lab paths and sample PCAP datasets."

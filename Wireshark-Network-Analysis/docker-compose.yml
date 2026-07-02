@@ -1,42 +1,97 @@
 version: '3.8'
 
 # ==============================================================================
-# Wireshark Network Lab Virtual Infrastructure
-# Purpose: Launches isolated Linux containers (Kali Analyst, Corporate Server)
-#          bridged on a single network to safely reproduce attacks and captures.
+# Wireshark Network Lab Virtual Security Infrastructure
+# Purpose: Orchestrates an isolated multi-node subnet (Analyst, WebServer, 
+#          compromised pivot) for safe packet analysis training and simulation.
 # ==============================================================================
 
 services:
-  # Wireshark/TShark Sniffing Analysis Host
+  # Cybersecurity Analyst Workstation (Armed with TShark and python forensic engines)
   analyst-kali:
     image: kalilinux/kali-rolling:latest
     container_name: analyst-kali
+    restart: always
     cap_add:
-      - NET_ADMIN  # Essential permission for running live promiscuous packet captures
+      - NET_ADMIN  # Direct hardware adapter sniffing privileges
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 2G
+    environment:
+      - DEBIAN_FRONTEND=noninteractive
+      - MONITORING_INTERFACE=any
     volumes:
-      - ./captures:/home/analyst/captures
-      - ./python:/home/analyst/scripts
+      - captures_volume:/home/analyst/captures
+      - ./python:/home/analyst/scripts:ro
+      - ./datasets:/home/analyst/datasets:ro
+      - ./logs:/home/analyst/logs
     networks:
       lab-network:
         ipv4_address: 192.168.1.150
+    healthcheck:
+      test: ["CMD", "which", "tshark"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
     command: >
-      bash -c "apt-get update && apt-get install -y tshark tcpdump python3 pip &&
+      bash -c "apt-get update && 
+               apt-get install -y tshark tcpdump python3 python3-pip python3-venv sqlite3 &&
+               python3 -m pip install scapy pyshark pandas matplotlib &&
                tail -f /dev/null"
 
-  # Corporate Asset serving HTTP, FTP, and MySQL
+  # Corporate Production server serving HTTP, FTP, and MySQL
   corporate-server:
     image: ubuntu:22.04
     container_name: corporate-server
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    environment:
+      - APACHE_RUN_USER=www-data
     networks:
       lab-network:
         ipv4_address: 192.168.1.10
+    healthcheck:
+      test: ["CMD", "service", "apache2", "status"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
     command: >
-      bash -c "apt-get update && apt-get install -y apache2 vsftpd mariadb-server &&
+      bash -c "apt-get update && 
+               apt-get install -y apache2 vsftpd mariadb-server curl &&
                service apache2 start &&
                tail -f /dev/null"
 
+  # Infected Workstation used as a remote pivot for lateral reconnaissance
+  compromised-workstation:
+    image: ubuntu:20.04
+    container_name: compromised-workstation
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      lab-network:
+        ipv4_address: 192.168.1.120
+    command: >
+      bash -c "apt-get update && 
+               apt-get install -y curl wget dnsutils net-tools iputils-ping &&
+               tail -f /dev/null"
+
+volumes:
+  captures_volume:
+    name: captures_data
+
 networks:
   lab-network:
+    name: security_lab_bridge
     driver: bridge
     ipam:
       config:

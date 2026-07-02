@@ -31,9 +31,10 @@ export interface ReportTemplate {
 }
 
 export const FILTERS_LIBRARY: FilterItem[] = [
+  // --- BASIC FILTERS ---
   {
     id: 'f1',
-    category: 'Basic',
+    category: 'Basic Filter',
     filter: 'ip.addr == 192.168.1.105',
     description: 'Filters all packets where the IP address is either the source or destination.',
     example: 'ip.addr == 192.168.1.105',
@@ -41,15 +42,25 @@ export const FILTERS_LIBRARY: FilterItem[] = [
   },
   {
     id: 'f2',
-    category: 'Basic',
+    category: 'Basic Filter',
     filter: 'ip.src == 192.168.1.55 && ip.dst == 192.168.1.10',
     description: 'Filters packets travelling from a specific source IP to a specific destination IP.',
     example: 'ip.src == 192.168.1.55 && ip.dst == 192.168.1.10',
     expectedOutput: 'Traffic stream originating strictly from host .55 going to server .10.'
   },
   {
+    id: 'f_sub',
+    category: 'Basic Filter',
+    filter: 'ip.addr == 192.168.1.0/24',
+    description: 'Filters traffic originating from or destined to an entire CIDR block / subnet.',
+    example: 'ip.addr == 192.168.1.0/24',
+    expectedOutput: 'All local area network (LAN) packet streams.'
+  },
+
+  // --- DNS FILTERS ---
+  {
     id: 'f3',
-    category: 'DNS',
+    category: 'DNS / Port 53',
     filter: 'dns.flags.response == 0',
     description: 'Filters for DNS query packets only.',
     example: 'dns.flags.response == 0',
@@ -57,15 +68,25 @@ export const FILTERS_LIBRARY: FilterItem[] = [
   },
   {
     id: 'f4',
-    category: 'DNS',
+    category: 'DNS / Port 53',
     filter: 'dns.flags.response == 1 && dns.flags.rcode != 0',
     description: 'Filters for DNS responses indicating an error (such as NXDOMAIN - No Such Name).',
     example: 'dns.flags.rcode == 3',
     expectedOutput: 'DNS server responses returning error code 3 (NXDOMAIN), commonly searched for in domain-generation-algorithm (DGA) or command & control discovery.'
   },
   {
+    id: 'f_dns_txt',
+    category: 'DNS / Port 53',
+    filter: 'dns.qry.type == 16',
+    description: 'Filters for DNS TXT queries, typically abused in DNS tunneling/data exfiltration schemes.',
+    example: 'dns.qry.type == 16',
+    expectedOutput: 'DNS TXT records showing Base64 or encrypted payload strings.'
+  },
+
+  // --- HTTP FILTERS ---
+  {
     id: 'f5',
-    category: 'HTTP',
+    category: 'HTTP / Web',
     filter: 'http.request.method == "POST"',
     description: 'Filters for all HTTP POST requests (often containing user logins, form submittals, or malware exfiltration payloads).',
     example: 'http.request.method == "POST"',
@@ -73,15 +94,25 @@ export const FILTERS_LIBRARY: FilterItem[] = [
   },
   {
     id: 'f6',
-    category: 'HTTP',
+    category: 'HTTP / Web',
     filter: 'http.user_agent matches "Wget|Curl|Python|nmap"',
     description: 'Filters for HTTP requests containing non-standard or command-line scripting User Agents, indicating automated scraping or tools scanning.',
     example: 'http.user_agent matches "nmap"',
     expectedOutput: 'Packet info showing request headers with the offending user agent string.'
   },
   {
+    id: 'f_http_err',
+    category: 'HTTP / Web',
+    filter: 'http.response.code >= 400',
+    description: 'Isolates web server failures and access denials (4xx and 5xx errors).',
+    example: 'http.response.code == 404',
+    expectedOutput: 'Client requests causing page errors, indicating scanning directories.'
+  },
+
+  // --- TCP FILTERS ---
+  {
     id: 'f7',
-    category: 'TCP',
+    category: 'TCP Analysis',
     filter: 'tcp.flags.syn == 1 && tcp.flags.ack == 0',
     description: 'Filters for TCP connection requests (SYN only). Extremely useful for port scan detection.',
     example: 'tcp.flags.syn == 1 && tcp.flags.ack == 0',
@@ -89,12 +120,22 @@ export const FILTERS_LIBRARY: FilterItem[] = [
   },
   {
     id: 'f8',
-    category: 'TCP',
+    category: 'TCP Analysis',
     filter: 'tcp.analysis.retransmission || tcp.analysis.duplicate_ack',
     description: 'Filters for TCP anomalies including retransmissions and duplicate ACKs. Standard indicators of network congestion or packet loss.',
     example: 'tcp.analysis.retransmission',
     expectedOutput: 'Highlighting frames in dark grey/red that indicate network errors, bad connections, or performance degradation.'
   },
+  {
+    id: 'f_tcp_rst',
+    category: 'TCP Analysis',
+    filter: 'tcp.flags.reset == 1',
+    description: 'Filters for TCP Reset packets, representing connections forcefully severed by endpoints or network devices.',
+    example: 'tcp.flags.reset == 1',
+    expectedOutput: 'TCP connection abort streams.'
+  },
+
+  // --- TLS FILTERS ---
   {
     id: 'f9',
     category: 'TLS / HTTPS',
@@ -104,13 +145,33 @@ export const FILTERS_LIBRARY: FilterItem[] = [
     expectedOutput: 'Shows the Client Hello handshake packets, containing cleartext Server Name Indication (SNI) indicating which secure domain the workstation is connecting to.'
   },
   {
+    id: 'f_tls_ver',
+    category: 'TLS / HTTPS',
+    filter: 'tls.handshake.version < 0x0303',
+    description: 'Isolates weak/deprecating cryptographic protocols (e.g., TLS 1.1, TLS 1.0, SSLv3).',
+    example: 'tls.handshake.version == 0x0301',
+    expectedOutput: 'Legacy, insecure secure sockets layer (SSL) traffic.'
+  },
+
+  // --- ARP FILTERS ---
+  {
     id: 'f10',
-    category: 'ARP',
+    category: 'ARP / L2',
     filter: 'arp.opcode == 2 && arp.duplicate-address-detected',
     description: 'Filters for ARP reply packets where a duplicate IP address conflict has been resolved. Highly indicative of ARP spoofing.',
     example: 'arp.opcode == 2',
     expectedOutput: 'ARP replies claiming to own an IP that already belongs to another MAC address.'
   },
+  {
+    id: 'f_arp_req',
+    category: 'ARP / L2',
+    filter: 'arp.opcode == 1',
+    description: 'Filters for ARP requests ("Who has IP x.x.x.x? Tell y.y.y.y").',
+    example: 'arp.opcode == 1',
+    expectedOutput: 'Broadcast frames trying to resolve MAC hardware addresses.'
+  },
+
+  // --- DHCP FILTERS ---
   {
     id: 'f11',
     category: 'DHCP',
@@ -119,13 +180,41 @@ export const FILTERS_LIBRARY: FilterItem[] = [
     example: 'bootp.option.value == 2',
     expectedOutput: 'A DHCP Offer packet sent from a source IP address that does not match the corporate DHCP helper range.'
   },
+
+  // --- MALWARE FILTERS ---
   {
     id: 'f12',
-    category: 'Malware',
+    category: 'Threat Hunting',
     filter: 'dns.qry.name.len > 40 && dns.qry.type == 16',
     description: 'Filters for DNS query lengths greater than 40 characters requesting TXT records, an indicator of DNS tunneling and exfiltration.',
     example: 'dns.qry.name.len > 40 && dns.qry.type == 16',
     expectedOutput: 'Suspiciously long DNS queries containing subdomains of encoded bytes requesting TXT profiles.'
+  },
+  {
+    id: 'f_shell',
+    category: 'Threat Hunting',
+    filter: 'http.request.uri matches "cmd\\.exe|/bin/sh|/bin/bash|wget|whoami"',
+    description: 'Isolates web requests targeting remote code execution or reverse shell commands.',
+    example: 'http.request.uri contains "cmd.exe"',
+    expectedOutput: 'Web server access logs containing interactive shell directives.'
+  },
+
+  // --- VPN / GRE / TUNNELING FILTERS ---
+  {
+    id: 'f_gre',
+    category: 'VPN / Tunneling',
+    filter: 'gre || ip.proto == 47',
+    description: 'Isolates Generic Routing Encapsulation (GRE) tunnels, often used to bypass egress firewalls.',
+    example: 'gre',
+    expectedOutput: 'Encapsulated inner packet streams.'
+  },
+  {
+    id: 'f_wireguard',
+    category: 'VPN / Tunneling',
+    filter: 'udp.port == 51820',
+    description: 'Isolates default WireGuard VPN traffic, helping identify unauthorized VPN bridges.',
+    example: 'udp.port == 51820',
+    expectedOutput: 'Encrypted tunnel handshakes.'
   }
 ];
 
@@ -200,6 +289,48 @@ export const INVESTIGATIONS: InvestigationItem[] = [
       'Enable SSL/TLS decryption on the boundary proxy server to monitor encrypted payload payloads.',
       'Implement User-Agent white-listing: block all outbound user agent headers that do not match current standard enterprise browsers.'
     ]
+  },
+  {
+    id: 'arp_spoofing',
+    title: 'ARP Spoofing & Man-In-The-Middle (MITM) Audit',
+    background: 'ARP Spoofing occurs when an attacker sends falsified ARP replies to link their physical MAC address with the IP address of a legitimate gateway router, enabling packet sniffing or tampering.',
+    steps: [
+      'Inspect the subnet for unprompted ARP reply packets (gratuitous ARPs) claiming to own the local default gateway IP (192.168.1.1).',
+      'Compare MAC addresses: identify if two distinct IP addresses map to the exact same physical MAC address in the stream (mac-spoofing).',
+      'Correlate ARP Reply traffic volume: legitimate systems update hardware tables periodically, whereas spoofing tools flood tables constantly.'
+    ],
+    filters: [
+      { title: 'Detect ARP Duplicate IP conflicts', cmd: 'arp.duplicate-address-detected', explanation: 'Wireshark built-in expert flag that triggers when multiple MACs bind to a single active IP address.' },
+      { title: 'Isolate Gateway ARP replies', cmd: 'arp.opcode == 2 && arp.src.proto_ipv4 == 192.168.1.1', explanation: 'Filters all ARP answers originating from the gateway IP. Verify if the source MAC matches the router\'s official MAC.' }
+    ],
+    expectedFindings: 'Packets 12 and 18 show ARP answers stating 192.168.1.1 is located at MAC 00:0c:29:ab:cd:12 (Attacker Box) instead of 00:50:56:c0:00:08 ( pfSense Router). This successfully rerouted all local workstation traffic through the attacker.',
+    mitreMapping: 'Credential Access (TA0006) → Adversary-in-the-Middle (T1557)',
+    recommendations: [
+      'Enforce Dynamic ARP Inspection (DAI) on all Cisco/Managed layer 2 hardware switches.',
+      'Configure static ARP table bindings on high-value corporate server nodes.',
+      'Deploy DHCP Snooping on edge access ports to validate ARP-to-DHCP binding logs.'
+    ]
+  },
+  {
+    id: 'rogue_dhcp',
+    title: 'Rogue DHCP Server Sweep Detection',
+    background: 'Rogue DHCP servers are introduced maliciously or accidentally on a network. They lease fake IP addresses, DNS server parameters, and default gateways to clients, facilitating MITM attacks.',
+    steps: [
+      'Identify DHCP Lease transaction loops: DISCOVER -> OFFER -> REQUEST -> ACK.',
+      'Verify DHCP Offer packets: check if DHCP Offers originate from unauthorized servers.',
+      'Inspect the leased parameters: check if the DNS server and Default Gateway leased match the official corporate range.'
+    ],
+    filters: [
+      { title: 'Identify DHCP Offer packets', cmd: 'bootp.option.type == 53 && bootp.option.value == 2', explanation: 'Isolates DHCP Offer responses from servers to workstations.' },
+      { title: 'Anomalous DHCP Server sources', cmd: 'udp.port == 67 && ip.src != 192.168.1.1', explanation: 'Flags any DHCP traffic originating from an IP other than the authorized local gateway/DHCP host.' }
+    ],
+    expectedFindings: 'Workstation requested an IP address. An unauthorized server at 192.168.1.145 responded with a DHCP Offer, setting the Default Gateway to itself (192.168.1.145) and DNS to 8.8.8.8, attempting a routing hijack.',
+    mitreMapping: 'Credential Access (TA0006) → Adversary-in-the-Middle: DHCP Spoofing (T1557.001)',
+    recommendations: [
+      'Deploy DHCP Snooping on layer 2 switches, disabling untrusted ports from sending DHCP Offers.',
+      'Perform a physical sweep to isolate the device at IP 192.168.1.145.',
+      'Monitor DHCP alerts on central SIEM dashboards.'
+    ]
   }
 ];
 
@@ -261,9 +392,9 @@ export const VIRTUAL_LAB_GUIDE = {
                            │
                      [ INTERNET ]
                            │
-                   [ EDGE FIREWALL ]
-                    (pfSense Router)
-                     (192.168.1.1)
+                    [ EDGE FIREWALL ]
+                     (pfSense Router)
+                      (192.168.1.1)
                            │
               ┌────────────┴────────────┐
               │                         │

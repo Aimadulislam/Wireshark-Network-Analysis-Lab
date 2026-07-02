@@ -6,3 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Force track all Markdown documentation files
+!*.md
+!**/*.md
+

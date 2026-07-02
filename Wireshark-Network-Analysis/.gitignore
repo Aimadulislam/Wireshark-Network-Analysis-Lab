@@ -21,6 +21,11 @@ reports/*.json
 reports/*.md
 logs/*.log
 
+# Ensure all documentation markdown files are always tracked
+!*.md
+!docs/*.md
+!docs/**/*.md
+
 # IDE and System Files
 .idea/
 .vscode/

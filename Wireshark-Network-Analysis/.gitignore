@@ -1,0 +1,28 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+.venv/
+env/
+.env
+
+# Raw network captures (large binary archives)
+captures/*.pcap
+captures/*.pcapng
+datasets/*.pcap
+datasets/*.pcapng
+
+# Local dynamic outputs
+analysis/*.json
+reports/*.json
+reports/*.md
+logs/*.log
+
+# IDE and System Files
+.idea/
+.vscode/
+.DS_Store
+*.swp

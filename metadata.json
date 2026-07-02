@@ -1,0 +1,6 @@
+{
+  "name": "Wireshark Network Analysis Lab",
+  "description": "An interactive network security lab and real-time PCAP analysis dashboard designed to teach packet capture, protocol dissection, and cybersecurity threat investigations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

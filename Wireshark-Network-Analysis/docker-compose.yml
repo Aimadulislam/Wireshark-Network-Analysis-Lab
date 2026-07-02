@@ -1,0 +1,44 @@
+version: '3.8'
+
+# ==============================================================================
+# Wireshark Network Lab Virtual Infrastructure
+# Purpose: Launches isolated Linux containers (Kali Analyst, Corporate Server)
+#          bridged on a single network to safely reproduce attacks and captures.
+# ==============================================================================
+
+services:
+  # Wireshark/TShark Sniffing Analysis Host
+  analyst-kali:
+    image: kalilinux/kali-rolling:latest
+    container_name: analyst-kali
+    cap_add:
+      - NET_ADMIN  # Essential permission for running live promiscuous packet captures
+    volumes:
+      - ./captures:/home/analyst/captures
+      - ./python:/home/analyst/scripts
+    networks:
+      lab-network:
+        ipv4_address: 192.168.1.150
+    command: >
+      bash -c "apt-get update && apt-get install -y tshark tcpdump python3 pip &&
+               tail -f /dev/null"
+
+  # Corporate Asset serving HTTP, FTP, and MySQL
+  corporate-server:
+    image: ubuntu:22.04
+    container_name: corporate-server
+    networks:
+      lab-network:
+        ipv4_address: 192.168.1.10
+    command: >
+      bash -c "apt-get update && apt-get install -y apache2 vsftpd mariadb-server &&
+               service apache2 start &&
+               tail -f /dev/null"
+
+networks:
+  lab-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.1.0/24
+          gateway: 192.168.1.1

@@ -1,0 +1,102 @@
+# ==============================================================================
+# Wireshark Network Analysis - Production CI/CD Pipeline
+# Purpose: Automatically runs code formatting checks, ShellCheck audits,
+#          Python unittests, and Docker Multi-stage build validations on
+#          every Pull Request or Branch Push.
+# ==============================================================================
+
+name: Wireshark Forensics Lab CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # 1. Code Quality & Linting Audit
+  lint-and-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python Environment
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Linting & Security dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 black bandit safety
+
+      - name: Code Formatting Check (Black)
+        run: |
+          black --check python/ tests/
+
+      - name: Python PEP8 Style Verification (Flake8)
+        run: |
+          # Stop the build if there are Python syntax errors or undefined names
+          flake8 python/ tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          # exit-zero treats all errors as warnings.
+          flake8 python/ tests/ --count --exit-zero --max-complexity=10 --max-line-length=120 --statistics
+
+      - name: ShellScript Compliance Scan (ShellCheck)
+        uses: ludeeus/action-shellcheck@master
+        with:
+          ignore_paths: venv/
+          severity: warning
+
+      - name: Secure Coding Analysis (Bandit SAST)
+        run: |
+          bandit -r python/ -ll -ii
+
+      - name: Python Dependency Security Audit (Safety)
+        run: |
+          # Audit python dependencies for known vulnerabilities
+          safety check -r requirements.txt || true
+
+  # 2. Automated Test Executions
+  run-forensics-tests:
+    needs: lint-and-audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python Environment
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Lab dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Forensic Modules Unit Tests
+        run: |
+          python -m unittest discover -s tests/ -p "*_test.py" -v
+
+  # 3. Docker Platform Validation
+  docker-validation:
+    needs: run-forensics-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build Forensic Sandbox Container
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false  # Only validate that building succeeds, do not push to registry
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

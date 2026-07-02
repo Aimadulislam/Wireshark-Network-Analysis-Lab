@@ -139,6 +139,62 @@ export default function App() {
     setAppliedFilter('');
   };
 
+  // Export filtered packets as CSV
+  const exportAsCSV = () => {
+    if (filteredPackets.length === 0) {
+      triggerToast("No packets to export!");
+      return;
+    }
+    const headers = ["No", "Time", "Source", "Destination", "Protocol", "Length", "Info", "Flags", "Payload", "Suspicious"];
+    const csvRows = [
+      headers.join(','),
+      ...filteredPackets.map(pkt => {
+        return [
+          pkt.id,
+          pkt.time.toFixed(4),
+          `"${pkt.source.replace(/"/g, '""')}"`,
+          `"${pkt.destination.replace(/"/g, '""')}"`,
+          `"${pkt.protocol.replace(/"/g, '""')}"`,
+          pkt.length,
+          `"${pkt.info.replace(/"/g, '""')}"`,
+          `"${(pkt.flags || '').replace(/"/g, '""')}"`,
+          `"${(pkt.payload || '').replace(/"/g, '""')}"`,
+          pkt.suspicious ? "TRUE" : "FALSE"
+        ].join(',');
+      })
+    ];
+    const csvContent = "\uFEFF" + csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", url);
+    downloadAnchor.setAttribute("download", `wireshark_filtered_packets_${selectedScenarioId}.csv`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+    URL.revokeObjectURL(url);
+    triggerToast(`Successfully exported ${filteredPackets.length} packets as CSV`);
+  };
+
+  // Export filtered packets as JSON
+  const exportAsJSON = () => {
+    if (filteredPackets.length === 0) {
+      triggerToast("No packets to export!");
+      return;
+    }
+    const jsonContent = JSON.stringify(filteredPackets, null, 2);
+    const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", url);
+    downloadAnchor.setAttribute("download", `wireshark_filtered_packets_${selectedScenarioId}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+    URL.revokeObjectURL(url);
+    triggerToast(`Successfully exported ${filteredPackets.length} packets as JSON`);
+  };
+
   // Compile Report Markdown
   const handleGenerateReport = (e: React.FormEvent) => {
     e.preventDefault();
@@ -628,8 +684,26 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="text-[11px] text-slate-400 font-mono">
-                  Showing {filteredPackets.length} of {scenario.packets.length} frames
+                <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto shrink-0 font-mono text-[11px] text-slate-400 justify-between md:justify-start">
+                  <span>Showing {filteredPackets.length} of {scenario.packets.length} frames</span>
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={exportAsCSV}
+                      title="Export currently filtered view of packets as a CSV file"
+                      className="text-[10px] font-bold bg-slate-950 hover:bg-slate-800 hover:text-white text-cyan-400 px-2.5 py-1.5 rounded border border-slate-800 flex items-center gap-1.5 transition shrink-0 cursor-pointer"
+                    >
+                      <Download className="w-3 h-3 text-cyan-400" />
+                      <span>Export CSV</span>
+                    </button>
+                    <button
+                      onClick={exportAsJSON}
+                      title="Export currently filtered view of packets as a JSON file"
+                      className="text-[10px] font-bold bg-slate-950 hover:bg-slate-800 hover:text-white text-cyan-400 px-2.5 py-1.5 rounded border border-slate-800 flex items-center gap-1.5 transition shrink-0 cursor-pointer"
+                    >
+                      <Download className="w-3 h-3 text-cyan-400" />
+                      <span>Export JSON</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 

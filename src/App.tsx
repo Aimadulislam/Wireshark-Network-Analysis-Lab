@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Network, 
   ShieldAlert, 
@@ -57,6 +57,14 @@ export default function App() {
   const [wiresharkFilter, setWiresharkFilter] = useState<string>('');
   const [appliedFilter, setAppliedFilter] = useState<string>('');
   const [selectedPacket, setSelectedPacket] = useState<Packet | null>(scenario.packets[0] || null);
+
+  // Selected Packet IDs for bulk actions
+  const [selectedPacketIds, setSelectedPacketIds] = useState<number[]>([]);
+
+  // Clear selection when scenario changes
+  useEffect(() => {
+    setSelectedPacketIds([]);
+  }, [selectedScenarioId]);
 
   // Report Form state
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('incident');
@@ -139,16 +147,25 @@ export default function App() {
     setAppliedFilter('');
   };
 
-  // Export filtered packets as CSV
+  // Get dynamic packets list for export based on selection state
+  const getPacketsToExport = () => {
+    if (selectedPacketIds.length > 0) {
+      return scenario.packets.filter(pkt => selectedPacketIds.includes(pkt.id));
+    }
+    return filteredPackets;
+  };
+
+  // Export filtered/selected packets as CSV
   const exportAsCSV = () => {
-    if (filteredPackets.length === 0) {
+    const packetsToExport = getPacketsToExport();
+    if (packetsToExport.length === 0) {
       triggerToast("No packets to export!");
       return;
     }
     const headers = ["No", "Time", "Source", "Destination", "Protocol", "Length", "Info", "Flags", "Payload", "Suspicious"];
     const csvRows = [
       headers.join(','),
-      ...filteredPackets.map(pkt => {
+      ...packetsToExport.map(pkt => {
         return [
           pkt.id,
           pkt.time.toFixed(4),
@@ -168,31 +185,38 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute("href", url);
-    downloadAnchor.setAttribute("download", `wireshark_filtered_packets_${selectedScenarioId}.csv`);
+    const filename = selectedPacketIds.length > 0 
+      ? `wireshark_selected_packets_${selectedScenarioId}.csv` 
+      : `wireshark_filtered_packets_${selectedScenarioId}.csv`;
+    downloadAnchor.setAttribute("download", filename);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
     URL.revokeObjectURL(url);
-    triggerToast(`Successfully exported ${filteredPackets.length} packets as CSV`);
+    triggerToast(`Successfully exported ${packetsToExport.length} packets as CSV`);
   };
 
-  // Export filtered packets as JSON
+  // Export filtered/selected packets as JSON
   const exportAsJSON = () => {
-    if (filteredPackets.length === 0) {
+    const packetsToExport = getPacketsToExport();
+    if (packetsToExport.length === 0) {
       triggerToast("No packets to export!");
       return;
     }
-    const jsonContent = JSON.stringify(filteredPackets, null, 2);
+    const jsonContent = JSON.stringify(packetsToExport, null, 2);
     const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute("href", url);
-    downloadAnchor.setAttribute("download", `wireshark_filtered_packets_${selectedScenarioId}.json`);
+    const filename = selectedPacketIds.length > 0 
+      ? `wireshark_selected_packets_${selectedScenarioId}.json` 
+      : `wireshark_filtered_packets_${selectedScenarioId}.json`;
+    downloadAnchor.setAttribute("download", filename);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
     URL.revokeObjectURL(url);
-    triggerToast(`Successfully exported ${filteredPackets.length} packets as JSON`);
+    triggerToast(`Successfully exported ${packetsToExport.length} packets as JSON`);
   };
 
   // Compile Report Markdown
@@ -685,23 +709,38 @@ export default function App() {
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto shrink-0 font-mono text-[11px] text-slate-400 justify-between md:justify-start">
-                  <span>Showing {filteredPackets.length} of {scenario.packets.length} frames</span>
+                  <div className="flex items-center gap-2">
+                    <span>
+                      {selectedPacketIds.length > 0 
+                        ? `${selectedPacketIds.length} frames selected` 
+                        : `Showing ${filteredPackets.length} of ${scenario.packets.length} frames`
+                      }
+                    </span>
+                    {selectedPacketIds.length > 0 && (
+                      <button
+                        onClick={() => setSelectedPacketIds([])}
+                        className="text-[10px] font-bold text-red-400 hover:text-red-300 transition shrink-0 cursor-pointer px-1.5 py-0.5 rounded border border-red-500/20 bg-red-500/5 hover:bg-red-500/10"
+                      >
+                        Clear Selection
+                      </button>
+                    )}
+                  </div>
                   <div className="flex gap-1.5">
                     <button
                       onClick={exportAsCSV}
-                      title="Export currently filtered view of packets as a CSV file"
+                      title={selectedPacketIds.length > 0 ? "Export selected packets as CSV" : "Export currently filtered view of packets as a CSV file"}
                       className="text-[10px] font-bold bg-slate-950 hover:bg-slate-800 hover:text-white text-cyan-400 px-2.5 py-1.5 rounded border border-slate-800 flex items-center gap-1.5 transition shrink-0 cursor-pointer"
                     >
                       <Download className="w-3 h-3 text-cyan-400" />
-                      <span>Export CSV</span>
+                      <span>{selectedPacketIds.length > 0 ? "Export Selected CSV" : "Export CSV"}</span>
                     </button>
                     <button
                       onClick={exportAsJSON}
-                      title="Export currently filtered view of packets as a JSON file"
+                      title={selectedPacketIds.length > 0 ? "Export selected packets as JSON" : "Export currently filtered view of packets as a JSON file"}
                       className="text-[10px] font-bold bg-slate-950 hover:bg-slate-800 hover:text-white text-cyan-400 px-2.5 py-1.5 rounded border border-slate-800 flex items-center gap-1.5 transition shrink-0 cursor-pointer"
                     >
                       <Download className="w-3 h-3 text-cyan-400" />
-                      <span>Export JSON</span>
+                      <span>{selectedPacketIds.length > 0 ? "Export Selected JSON" : "Export JSON"}</span>
                     </button>
                   </div>
                 </div>
@@ -723,6 +762,23 @@ export default function App() {
                     <table className="w-full text-left border-collapse">
                       <thead className="sticky top-0 bg-slate-950 text-slate-400 shadow">
                         <tr className="border-b border-slate-800">
+                          <th className="py-2 px-3 w-10 text-center">
+                            <input 
+                              type="checkbox"
+                              checked={filteredPackets.length > 0 && filteredPackets.every(pkt => selectedPacketIds.includes(pkt.id))}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  const allFilteredIds = filteredPackets.map(pkt => pkt.id);
+                                  setSelectedPacketIds(prev => Array.from(new Set([...prev, ...allFilteredIds])));
+                                } else {
+                                  const filteredIdsSet = new Set(filteredPackets.map(pkt => pkt.id));
+                                  setSelectedPacketIds(prev => prev.filter(id => !filteredIdsSet.has(id)));
+                                }
+                              }}
+                              className="rounded border-slate-700 text-cyan-500 focus:ring-cyan-500/20 bg-slate-900 cursor-pointer w-3.5 h-3.5"
+                              title="Toggle select all frames in filtered view"
+                            />
+                          </th>
                           <th className="py-2 px-3">No.</th>
                           <th className="py-2 px-2">Time</th>
                           <th className="py-2 px-2">Source</th>
@@ -735,6 +791,7 @@ export default function App() {
                       <tbody>
                         {filteredPackets.map((pkt) => {
                           const isSelected = selectedPacket?.id === pkt.id;
+                          const isChecked = selectedPacketIds.includes(pkt.id);
                           return (
                             <tr 
                               key={pkt.id}
@@ -747,6 +804,20 @@ export default function App() {
                                     : 'text-slate-300 hover:bg-slate-800/30'
                               }`}
                             >
+                              <td className="py-2 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                                <input 
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => {
+                                    setSelectedPacketIds(prev => 
+                                      prev.includes(pkt.id) 
+                                        ? prev.filter(id => id !== pkt.id) 
+                                        : [...prev, pkt.id]
+                                    );
+                                  }}
+                                  className="rounded border-slate-700 text-cyan-500 focus:ring-cyan-500/20 bg-slate-900 cursor-pointer w-3.5 h-3.5"
+                                />
+                              </td>
                               <td className="py-2 px-3 font-semibold">{pkt.id}</td>
                               <td className="py-2 px-2">{pkt.time.toFixed(4)}</td>
                               <td className="py-2 px-2 truncate max-w-[110px]" title={pkt.source}>{pkt.source}</td>
@@ -769,7 +840,7 @@ export default function App() {
                         })}
                         {filteredPackets.length === 0 && (
                           <tr>
-                            <td colSpan={7} className="py-12 text-center text-slate-500 text-xs">
+                            <td colSpan={8} className="py-12 text-center text-slate-500 text-xs">
                               No frames matched the active filter expression. Try "dns" or "tcp".
                             </td>
                           </tr>
